@@ -1,0 +1,57 @@
+name: app-sarif-sdk CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    name: Build (Checkout)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+  debricked:
+    name: Debricked
+    needs: build
+    uses: evernowbr/actions-toolkit/.github/workflows/debricked.yml@main
+    secrets:
+      DEBRICKED_TOKEN: ${{ secrets.DEBRICKED_TOKEN }}
+
+  dependency-track:
+    name: Dependency-Track 
+    needs: build
+    uses: evernowbr/actions-toolkit/.github/workflows/dependency-track.yml@main
+    with:
+      name: ${{ github.repository }}
+      version: ${{ github.ref_name }}
+    secrets:
+      DT_SCA_ENDPOINT: ${{ secrets.DT_SCA_ENDPOINT }}
+      DT_TOKEN: ${{ secrets.DT_TOKEN }}
+
+  fortify-sast:
+    name: Fortify SAST
+    needs:  
+      - debricked
+      - dependency-track
+    uses: evernowbr/actions-toolkit/.github/workflows/fortify-sast.yml@main
+    with:
+      name: ${{ github.repository }}
+      version: ${{ github.ref_name }}
+      fortify_scancentral_tool: "scancentral"
+      fortify_translate_name: "-bt none"
+      fortify_translate_additional_flags: ""
+    secrets:
+      FORTIFY_SSC_API_URL: ${{ secrets.FORTIFY_SSC_API_URL }}
+      FORTIFY_UNIFIED_LOGIN_TOKEN: ${{ secrets.FORTIFY_UNIFIED_LOGIN_TOKEN }}
+      FORTIFY_CONTROLLER_URL: ${{ secrets.FORTIFY_CONTROLLER_URL }}
+      FORTIFY_CONTROLLER_TOKEN: ${{ secrets.FORTIFY_CONTROLLER_TOKEN }}
+
+
+
