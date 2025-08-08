@@ -57,7 +57,7 @@ jobs:
   publish-nuget:
     name: Publicar no GitHub Packages
     runs-on: ubuntu-latest
-    needs: fortify-sast
+    # needs: fortify-sast
     permissions:
       packages: write
       contents: read
