@@ -8,6 +8,7 @@ on:
 permissions:
   actions: read
   contents: read
+  packages: write  # Necessário para publicar no GitHub Packages
 
 jobs:
   build:
@@ -17,41 +18,68 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-  debricked:
-    name: Debricked
-    needs: build
-    uses: evernowbr/actions-toolkit/.github/workflows/debricked.yml@main
-    secrets:
-      DEBRICKED_TOKEN: ${{ secrets.DEBRICKED_TOKEN }}
+  # debricked:
+  #   name: Debricked
+  #   needs: build
+  #   uses: evernowbr/actions-toolkit/.github/workflows/debricked.yml@main
+  #   secrets:
+  #     DEBRICKED_TOKEN: ${{ secrets.DEBRICKED_TOKEN }}
 
-  dependency-track:
-    name: Dependency-Track 
-    needs: build
-    uses: evernowbr/actions-toolkit/.github/workflows/dependency-track.yml@main
-    with:
-      name: ${{ github.repository }}
-      version: ${{ github.ref_name }}
-    secrets:
-      DT_SCA_ENDPOINT: ${{ secrets.DT_SCA_ENDPOINT }}
-      DT_TOKEN: ${{ secrets.DT_TOKEN }}
+  # dependency-track:
+  #   name: Dependency-Track 
+  #   needs: build
+  #   uses: evernowbr/actions-toolkit/.github/workflows/dependency-track.yml@main
+  #   with:
+  #     name: ${{ github.repository }}
+  #     version: ${{ github.ref_name }}
+  #   secrets:
+  #     DT_SCA_ENDPOINT: ${{ secrets.DT_SCA_ENDPOINT }}
+  #     DT_TOKEN: ${{ secrets.DT_TOKEN }}
 
-  fortify-sast:
-    name: Fortify SAST
-    needs:  
-      - debricked
-      - dependency-track
-    uses: evernowbr/actions-toolkit/.github/workflows/fortify-sast.yml@main
-    with:
-      name: ${{ github.repository }}
-      version: ${{ github.ref_name }}
-      fortify_scancentral_tool: "scancentral"
-      fortify_translate_name: "-bt none"
-      fortify_translate_additional_flags: ""
-    secrets:
-      FORTIFY_SSC_API_URL: ${{ secrets.FORTIFY_SSC_API_URL }}
-      FORTIFY_UNIFIED_LOGIN_TOKEN: ${{ secrets.FORTIFY_UNIFIED_LOGIN_TOKEN }}
-      FORTIFY_CONTROLLER_URL: ${{ secrets.FORTIFY_CONTROLLER_URL }}
-      FORTIFY_CONTROLLER_TOKEN: ${{ secrets.FORTIFY_CONTROLLER_TOKEN }}
+  # fortify-sast:
+  #   name: Fortify SAST
+  #   needs:  
+  #     - debricked
+  #     - dependency-track
+  #   uses: evernowbr/actions-toolkit/.github/workflows/fortify-sast.yml@main
+  #   with:
+  #     name: ${{ github.repository }}
+  #     version: ${{ github.ref_name }}
+  #     fortify_scancentral_tool: "scancentral"
+  #     fortify_translate_name: "-bt none"
+  #     fortify_translate_additional_flags: ""
+  #   secrets:
+  #     FORTIFY_SSC_API_URL: ${{ secrets.FORTIFY_SSC_API_URL }}
+  #     FORTIFY_UNIFIED_LOGIN_TOKEN: ${{ secrets.FORTIFY_UNIFIED_LOGIN_TOKEN }}
+  #     FORTIFY_CONTROLLER_URL: ${{ secrets.FORTIFY_CONTROLLER_URL }}
+  #     FORTIFY_CONTROLLER_TOKEN: ${{ secrets.FORTIFY_CONTROLLER_TOKEN }}
 
+  publish-nuget:
+    name: Publicar no GitHub Packages
+    runs-on: ubuntu-latest
+    needs: fortify-sast
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
 
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x' # ajuste se usar outra versão
 
+      - name: Restaurar dependências
+        run: dotnet restore
+
+      - name: Compilar
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Empacotar
+        run: dotnet pack --configuration Release --no-build -o ./artifacts
+
+      - name: Publicar pacote no GitHub Packages
+        run: dotnet nuget push "./artifacts/*.nupkg" \
+              --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+              --api-key ${{ secrets.GITHUB_TOKEN }}
